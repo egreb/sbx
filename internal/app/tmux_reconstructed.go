@@ -176,7 +176,7 @@ func (app *App) configureTmuxEnvironment(ctx context.Context) error {
 			return e
 		}
 	}
-	for _, b := range [][2]string{{"i", "new"}, {"o", "tui"}, {"f", "tui --current"}, {"s", "tui --current --split"}, {"a", "add"}, {"D", "delete"}} {
+	for _, b := range [][2]string{{"i", "new"}, {"o", "pick"}, {"f", "pick --current"}, {"s", "pick --current --split"}, {"a", "add"}, {"D", "delete"}} {
 		// run-shell expands formats at keypress time. Popup environment values and
 		// its shell command otherwise receive these format expressions literally.
 		popup := append([]string{"tmux"}, app.tmuxArgs("display-popup", "-E", "-w", "90%", "-h", "90%")...)

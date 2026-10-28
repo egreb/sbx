@@ -22,7 +22,7 @@ func (app *App) cmdTUI(args []string) error {
 			splitMode = true
 			currentOnly = true
 		default:
-			return fmt.Errorf("Usage: %s tui [--current] [--split]", app.Program)
+			return fmt.Errorf("Usage: %s pick [--current] [--split]", app.Program)
 		}
 	}
 	if err := app.checkCommand("tmux"); err != nil {
@@ -71,7 +71,7 @@ func (app *App) cmdPopup(args []string) error {
 		return errors.New("popup requires a workflow command")
 	}
 	action := args[0]
-	if action != "add" && action != "new" && action != "open" && action != "project" && action != "tui" && action != "delete" {
+	if action != "add" && action != "new" && action != "open" && action != "project" && action != "pick" && action != "delete" {
 		return fmt.Errorf("unsupported popup command: %s", action)
 	}
 	err := app.runner.Run(context.Background(), app.Self, append([]string{action}, args[1:]...), process.Options{})

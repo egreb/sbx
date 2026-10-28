@@ -36,6 +36,9 @@ sbx split frontend
 sbx list --names
 sbx delete                      # workspace picker, then exact-name confirmation
 sbx delete example              # requires typing the exact workspace name
+sbx delete dotfiles             # sandbox outside ~/sandboxes or with a missing
+                                # workspace: removes only the sandbox
+sbx pick                        # this wrapper's picker (`sbx tui` is Docker's)
 sbx doctor
 ```
 

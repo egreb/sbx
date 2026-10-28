@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestInitializeClaudeThemePreservesConfig(t *testing.T) {
+func TestInitializeClaudeConfigPreservesConfig(t *testing.T) {
 	python, err := exec.LookPath("python3")
 	if err != nil {
 		t.Skip("python3 unavailable")
@@ -23,7 +23,7 @@ func TestInitializeClaudeThemePreservesConfig(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			output, err := exec.Command(python, "-c", initializeClaudeThemeScript, "light").CombinedOutput()
+			output, err := exec.Command(python, "-c", initializeClaudeConfigScript, "light", "claude-opus-5-5", "high").CombinedOutput()
 			if initial == "invalid JSON" {
 				data, _ := os.ReadFile(path)
 				if err == nil || string(data) != initial {
@@ -47,6 +47,17 @@ func TestInitializeClaudeThemePreservesConfig(t *testing.T) {
 			}
 			if initial != "" && (got["hasCompletedOnboarding"] != true || got["custom"].(map[string]any)["keep"] != float64(42)) {
 				t.Fatalf("lost existing preferences: %v", got)
+			}
+			data, err = os.ReadFile(filepath.Join(dir, "settings.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var settings map[string]any
+			if err := json.Unmarshal(data, &settings); err != nil {
+				t.Fatal(err)
+			}
+			if settings["model"] != "claude-opus-5-5" || settings["effortLevel"] != "high" {
+				t.Fatalf("settings: %v", settings)
 			}
 		})
 	}

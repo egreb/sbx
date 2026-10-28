@@ -21,6 +21,8 @@ type Config struct {
 	GitCacheRoot    string
 	Agent           string
 	ClaudeTheme     string
+	ClaudeModel     string
+	ClaudeEffort    string
 	SandboxMemory   string
 	HostShell       string
 	TmuxSocket      string
@@ -121,6 +123,19 @@ func Load(_ string) (Config, error) {
 	default:
 		return Config{}, fmt.Errorf("invalid claude_theme: %s", claudeTheme)
 	}
+	claudeModel, err := get("claude_model", "claude-opus-5-5")
+	if err != nil {
+		return Config{}, err
+	}
+	claudeEffort, err := get("claude_effort", "high")
+	if err != nil {
+		return Config{}, err
+	}
+	switch claudeEffort {
+	case "", "low", "medium", "high", "xhigh", "max":
+	default:
+		return Config{}, fmt.Errorf("invalid claude_effort: %s", claudeEffort)
+	}
 	sandboxMemory, err := get("sandbox_memory", "8g")
 	if err != nil {
 		return Config{}, err
@@ -185,6 +200,8 @@ func Load(_ string) (Config, error) {
 		GitCacheRoot:    gitCacheRoot,
 		Agent:           agent,
 		ClaudeTheme:     claudeTheme,
+		ClaudeModel:     claudeModel,
+		ClaudeEffort:    claudeEffort,
 		SandboxMemory:   sandboxMemory,
 		HostShell:       hostShell,
 		TmuxSocket:      tmuxSocket,

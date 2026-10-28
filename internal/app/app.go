@@ -69,7 +69,7 @@ func (app *App) Run(args []string) int {
 	case "-h", "--help", "help":
 		app.usage()
 		return 0
-	case "new", "open", "add", "project", "split", "delete", "list", "doctor", "tui", "tmux-reload":
+	case "new", "open", "add", "project", "split", "delete", "list", "doctor", "pick", "tmux-reload":
 		if err = app.loadConfig(); err == nil {
 			switch command {
 			case "new":
@@ -88,7 +88,7 @@ func (app *App) Run(args []string) int {
 				err = app.cmdList(args)
 			case "doctor":
 				err = app.cmdDoctor(args)
-			case "tui":
+			case "pick":
 				err = app.cmdTUI(args)
 			case "tmux-reload":
 				err = app.cmdTmuxReload(args)
@@ -210,9 +210,11 @@ Commands:
   add [project]          Clone a configured project into the current workspace
   project [name|--next|--previous]  Open/switch a host project session
   split [project|agent]  Open a workspace session beside the current pane
-  delete [--yes] [name]  Pick a workspace to delete; confirm by typing its name
+  delete [--yes] [name]  Pick a workspace to delete; confirm by typing its name.
+                          Also removes sandboxes outside the workspace root
+                          (or whose workspace is missing), leaving host files
   list                    List managed workspaces
-  tui [--current] [--split]
+  pick [--current] [--split]
                           Browse, optionally selecting a side-by-side session
   tmux-reload             Reload the user config and reapply sbx bindings
   doctor                  Validate configuration and dependencies

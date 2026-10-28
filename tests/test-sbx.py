@@ -50,7 +50,7 @@ else:sys.exit(2)
    sbx('tmux-reload')
   assert (work/'alpha'/'.sbx-managed').is_file()
   assert run(['git','-C',str(work/'alpha'/'backend'),'remote','get-url','origin']).stdout.strip()==str(source)
-  assert '__popup tui' in tmux('list-keys','-T','prefix','o').stdout
+  assert '__popup pick' in tmux('list-keys','-T','prefix','o').stdout
   assert '__popup new' in tmux('list-keys','-T','prefix','i').stdout
   assert 'work-notes' in tmux('list-keys','-T','prefix','N').stdout
   print('PASS creation, local cache clones, metadata, overlay preserves notes binding',flush=True)

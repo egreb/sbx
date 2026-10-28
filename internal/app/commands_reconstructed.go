@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/signal"
 	"path/filepath"
 	"sbx/internal/model"
@@ -149,7 +150,12 @@ func (app *App) cmdDelete(args []string) error {
 	}
 	path, e := app.assertSafeWorkspace(filepath.Join(app.config.WorkspaceRoot, name), name)
 	if e != nil {
-		return e
+		// Not a managed workspace: the sandbox may mount a directory outside the
+		// workspace root, or one that no longer exists. Remove only the sandbox.
+		if _, statErr := os.Lstat(filepath.Join(app.config.WorkspaceRoot, name)); statErr == nil {
+			return e
+		}
+		return app.deleteSandboxOnly(name, yes, e)
 	}
 	if !yes {
 		answer, e := app.promptValue("Delete workspace " + name + " and its sandbox? Type the workspace name: ")
@@ -222,4 +228,48 @@ func cycleProject(projects []model.Project, workspace, session string, previous 
 		index = (index + 1) % len(projects)
 	}
 	return projects[index].Name
+}
+
+// deleteSandboxOnly removes a native sandbox that has no managed workspace,
+// leaving its mounted host directory alone. notManaged is reported when no
+// such sandbox exists either.
+func (app *App) deleteSandboxOnly(name string, yes bool, notManaged error) error {
+	ctx := context.Background()
+	exists, e := app.nativeSandboxNamedExists(ctx, name, false)
+	if e != nil {
+		return e
+	}
+	if !exists {
+		return notManaged
+	}
+	if !yes {
+		answer, e := app.promptValue("Delete sandbox " + name + "? Its workspace files are kept. Type the sandbox name: ")
+		if e != nil {
+			return e
+		}
+		if answer != name {
+			app.note("Cancelled.")
+			return nil
+		}
+	}
+	sessions := []tmuxSession{}
+	for _, session := range app.listTmuxSessions(ctx) {
+		if session.Managed && session.WorkspaceName == name {
+			sessions = append(sessions, session)
+		}
+	}
+	if e = app.stopWorkspaceJobs(ctx, sessions); e != nil {
+		return e
+	}
+	if e = app.runner.Run(ctx, app.native, []string{"rm", "--force", name}, process.Options{}); e != nil {
+		return e
+	}
+	for _, s := range sessions {
+		if app.tmuxSessionExists(ctx, s.Name) {
+			if e = app.tmuxRun(ctx, "kill-session", "-t", "="+s.Name); e != nil {
+				return e
+			}
+		}
+	}
+	return nil
 }

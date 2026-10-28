@@ -318,8 +318,8 @@ func (app *App) cmdNew(args []string) (returnErr error) {
 		return fmt.Errorf("Docker Sandbox creation did not produce '%s'", name)
 	}
 
-	if agent == "claude" && app.config.ClaudeTheme != "" {
-		if err := app.initializeClaudeTheme(ctx, name); err != nil {
+	if agent == "claude" && (app.config.ClaudeTheme != "" || app.config.ClaudeModel != "" || app.config.ClaudeEffort != "") {
+		if err := app.initializeClaudeConfig(ctx, name); err != nil {
 			return err
 		}
 	}
