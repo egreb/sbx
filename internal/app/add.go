@@ -10,15 +10,29 @@ import (
 )
 
 func (app *App) cmdAdd(args []string) error {
+	usage := fmt.Errorf("Usage: %s add [--workspace name] [project]", app.Program)
+	workspaceName := ""
+	if len(args) > 0 && args[0] == "--workspace" {
+		if len(args) < 2 {
+			return usage
+		}
+		workspaceName, args = args[1], args[2:]
+	}
 	if len(args) > 1 {
-		return fmt.Errorf("Usage: %s add [project]", app.Program)
+		return usage
 	}
 	ctx := context.Background()
-	current, err := app.currentManagedContext(ctx)
-	if err != nil {
+	workspacePath := filepath.Join(app.config.WorkspaceRoot, workspaceName)
+	if workspaceName == "" {
+		current, err := app.currentManagedContext(ctx)
+		if err != nil {
+			return err
+		}
+		workspaceName, workspacePath = current.WorkspaceName, current.Workspace
+	} else if err := validateName(workspaceName); err != nil {
 		return err
 	}
-	workspace, err := app.assertSafeWorkspace(current.Workspace, current.WorkspaceName)
+	workspace, err := app.assertSafeWorkspace(workspacePath, workspaceName)
 	if err != nil {
 		return err
 	}
@@ -82,6 +96,9 @@ func (app *App) cmdAdd(args []string) error {
 	if err := app.bootstrapProject(ctx, *selected, destination); err != nil {
 		return fmt.Errorf("project cloned at %s but setup failed: %w", destination, err)
 	}
-	app.note("Added %s to workspace %s.", name, current.WorkspaceName)
+	app.note("Added %s to workspace %s.", name, workspaceName)
+	if app.usingRex() {
+		return app.rexOpenProject(ctx, destination)
+	}
 	return nil
 }

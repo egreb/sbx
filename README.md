@@ -56,6 +56,58 @@ Repository mirrors live under `~/.cache/sbx/git`; workspace clones use Git trans
 This repairs future clones only. Existing workspaces with missing objects need a fresh clone; preserve any local changes, commits, and stashes before replacing them.
 Node versions are resolved by fnm before configured bootstrap hooks and pnpm install.
 
+## Rex
+
+With `multiplexer: rex` in `config.yaml`, each workspace is a Rex session named
+after it, starting with an `agent` tab running `sbx run`. Repositories open in
+tabs as you pick them with `Cmd-Shift-f`.
+`sbx new`, `open`, `add` and `delete` create, switch to and close those
+sessions through the actions in `rex/sbx.lua`. Pickers float over the current
+tab; size them with `picker_size` and `form_size` in `setup`. Load them from
+`~/.config/rex/init.lua`:
+
+```lua
+package.path = os.getenv("HOME") .. "/code/sbx/rex/?.lua;" .. package.path
+require("sbx").setup{ project_roots = { "~/code" } }
+```
+
+Then run `rex config reload` and turn on Remote Control in the app's settings
+(needed to switch sessions from sbx and the pickers).
+
+| Key | Action |
+| --- | --- |
+| `Cmd-f` | Find a repository under `project_roots`; open it in a tab of this session, reusing its tab |
+| `Cmd-Shift-n` | New workspace form |
+| `Cmd-Shift-o` | Pick a workspace and switch to its session, recreating it if needed |
+| `Cmd-Shift-f` | Pick a repository of this workspace, or add one |
+| `Cmd-Shift-d` | Pick a workspace to delete, then type its name to confirm |
+| `Cmd-Shift-a` | Show the workspace's agent floating over this tab; again to hide it (it keeps running) |
+| `Cmd-Shift-/` | Show these keybindings, as currently configured |
+| `Ctrl-h/j/k/l` | Move between panes; passed through to Neovim when it is in front |
+
+Remap any key with `keys = { find_project = "cmd+p" }` in `setup`, or set it to
+`false` to leave it unbound.
+
+For Neovim splits and Rex panes to act as one grid, add to the Neovim config:
+
+```lua
+if vim.env.REX_SESSION then
+  for key, direction in pairs({ h = "left", j = "down", k = "up", l = "right" }) do
+    vim.keymap.set("n", "<C-" .. key .. ">", function()
+      local win = vim.api.nvim_get_current_win()
+      vim.cmd("wincmd " .. key)
+      if win == vim.api.nvim_get_current_win() then
+        vim.system({ "rex", "do", "sbx_focus", "direction=" .. direction })
+      end
+    end)
+  end
+end
+```
+
+Workspace sessions are found by label, so renaming one in Rex makes sbx open a
+new session for it. Deleting a workspace does not stop host processes started
+in its Rex tabs before removing its files, as the tmux mode does.
+
 ## tmux
 
 The dedicated server defaults to `sbx-v1`, using your configured tmux prefix.

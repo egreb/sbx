@@ -1,0 +1,15 @@
+I want to repliace tmux behaviour in rex (superlogical)
+I want quick navigation across projects for investigations etc.
+But I also want to setup sbx to create workspaces for bigger features across
+multiple repos (projects). 
+
+I am hoping that this can be handled in `~/.config/rex/init.lua`
+Also want to jump between panes with ctrl+[h,j,k,l], also when I am within nvim
+
+Keybindings I want:
+
+cmd+f       : list projects within defined folders, open the selected one in a new rex tab. This is something I use alot with tmux
+cmd+shift+n : create new workspace with sbx  
+cmd+shift+o : select workspace to open/reuse tab
+cmd+shift+f : open project (repo) within workspace
+cmd+shift+d : delete workspace

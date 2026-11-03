@@ -116,6 +116,7 @@ func (app *App) cmdNew(args []string) (returnErr error) {
 		form, accepted, err := tui.RunWorkspaceForm(app.In, app.Out, tui.WorkspaceForm{
 			Name: name, Agent: agent, Prompt: prompt, Repositories: repositories,
 			Selected: selected, ValidateName: validateName, Notice: notice,
+			Editor: app.editorCommand(),
 		})
 		if err != nil {
 			return err
@@ -162,7 +163,11 @@ func (app *App) cmdNew(args []string) (returnErr error) {
 	if agent != "claude" && agent != "codex" {
 		return fmt.Errorf("agent must be 'claude' or 'codex', got: %s", agent)
 	}
-	for _, dependency := range []string{"git", "tmux"} {
+	dependencies := []string{"git", "tmux"}
+	if app.usingRex() {
+		dependencies = []string{"git", rexBinary()}
+	}
+	for _, dependency := range dependencies {
 		if err := app.checkCommand(dependency); err != nil {
 			return err
 		}
@@ -179,7 +184,7 @@ func (app *App) cmdNew(args []string) (returnErr error) {
 		return fmt.Errorf("workspace already exists: %s", workspace)
 	}
 	background := context.Background()
-	if app.tmuxSessionExists(background, name) {
+	if !app.usingRex() && app.tmuxSessionExists(background, name) {
 		return fmt.Errorf("tmux session already exists on the '%s' server: %s", app.config.TmuxSocket, name)
 	}
 	exists, err := app.nativeSandboxNamedExists(background, name, true)
@@ -287,12 +292,8 @@ func (app *App) cmdNew(args []string) (returnErr error) {
 			fmt.Fprint(app.Err, logs.String())
 			return err
 		}
-	} else {
-		for _, step := range cloneSteps {
-			if err := step.Run(); err != nil {
-				return err
-			}
-		}
+	} else if err := runParallel(cloneSteps, tui.CreationParallelism); err != nil {
+		return err
 	}
 
 	for _, project := range projects {
@@ -324,6 +325,15 @@ func (app *App) cmdNew(args []string) (returnErr error) {
 		}
 	}
 
+	if app.usingRex() {
+		app.note("- opening Rex session %s", name)
+		if err := app.rexOpenWorkspace(ctx, name, workspace, prompt, !noOpen); err != nil {
+			return fmt.Errorf("Rex session creation failed: %s", name)
+		}
+		complete = true
+		app.note("Created sandbox workspace '%s'.", name)
+		return nil
+	}
 	tmuxAttempted = true
 	app.note("- creating isolated tmux session %s", name)
 	if err := app.createAgentTmuxSession(ctx, name, workspace, name, prompt); err != nil {
@@ -347,4 +357,48 @@ func (log *creationLog) Write(data []byte) (int, error) {
 	log.Lock()
 	defer log.Unlock()
 	return log.Buffer.Write(data)
+}
+
+// runParallel runs up to limit steps at once and returns the first error.
+// After a failure no new steps start, and running ones are waited for.
+func runParallel(steps []tui.CreationStep, limit int) error {
+	var (
+		wait  sync.WaitGroup
+		mutex sync.Mutex
+		first error
+	)
+	slots := make(chan struct{}, limit)
+	for _, step := range steps {
+		slots <- struct{}{}
+		mutex.Lock()
+		failed := first != nil
+		mutex.Unlock()
+		if failed {
+			<-slots
+			break
+		}
+		wait.Add(1)
+		go func() {
+			defer func() { <-slots; wait.Done() }()
+			if err := step.Run(); err != nil {
+				mutex.Lock()
+				if first == nil {
+					first = err
+				}
+				mutex.Unlock()
+			}
+		}()
+	}
+	wait.Wait()
+	return first
+}
+
+// editorCommand is the shell command that edits a file named after it.
+func (app *App) editorCommand() string {
+	for _, editor := range []string{app.config.Editor, os.Getenv("VISUAL"), os.Getenv("EDITOR")} {
+		if editor != "" {
+			return editor
+		}
+	}
+	return "nvim"
 }

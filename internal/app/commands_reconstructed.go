@@ -55,6 +55,27 @@ func (app *App) cmdOpen(args []string) error {
 	if len(args) > 1 {
 		return fmt.Errorf("Usage: sbx open [name]")
 	}
+	if app.usingRex() {
+		ctx := context.Background()
+		name := ""
+		if len(args) == 1 {
+			name = args[0]
+		} else {
+			selected, ok, err := app.chooseWorkspace(ctx, "Open workspace > ")
+			if err != nil || !ok {
+				return err
+			}
+			name = selected
+		}
+		if e := validateName(name); e != nil {
+			return e
+		}
+		path, e := app.assertSafeWorkspace(filepath.Join(app.config.WorkspaceRoot, name), name)
+		if e != nil {
+			return e
+		}
+		return app.rexOpenWorkspace(ctx, name, path, "", true)
+	}
 	if len(args) == 0 {
 		return app.cmdTUI(nil)
 	}
@@ -111,7 +132,11 @@ func (app *App) cmdDoctor(args []string) error {
 	if _, e := app.loadProjects(); e != nil {
 		return e
 	}
-	for _, bin := range []string{"git", "tmux", app.config.HostShell} {
+	multiplexer := "tmux"
+	if app.usingRex() {
+		multiplexer = rexBinary()
+	}
+	for _, bin := range []string{"git", multiplexer, app.config.HostShell} {
 		if e := app.checkCommand(bin); e != nil {
 			return e
 		}
@@ -133,6 +158,14 @@ func (app *App) cmdDelete(args []string) error {
 		} else {
 			return fmt.Errorf("Usage: sbx delete [--yes] [name]")
 		}
+	}
+	if name == "" && app.usingRex() {
+		selected, ok, err := app.chooseWorkspace(context.Background(), "Delete workspace > ")
+		if err != nil || !ok {
+			return err
+		}
+		// Interactive selection always requires confirmation, even with --yes.
+		return app.cmdDelete([]string{selected})
 	}
 	if name == "" {
 		action, err := tui.Run(app, app.In, app.Out, tui.Options{Title: "Delete workspace", DeleteMode: true})
@@ -204,7 +237,14 @@ func (app *App) cmdDelete(args []string) error {
 	if e != nil {
 		return e
 	}
-	return removeWorkspaceTree(safe)
+	if e = removeWorkspaceTree(safe); e != nil {
+		return e
+	}
+	// Last, because this may close the terminal sbx runs in.
+	if app.usingRex() {
+		app.rexCloseWorkspace(ctx, name)
+	}
+	return nil
 }
 
 // cycleProject follows configured project order, wrapping within one workspace.
@@ -270,6 +310,9 @@ func (app *App) deleteSandboxOnly(name string, yes bool, notManaged error) error
 				return e
 			}
 		}
+	}
+	if app.usingRex() {
+		app.rexCloseWorkspace(ctx, name)
 	}
 	return nil
 }

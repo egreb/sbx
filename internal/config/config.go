@@ -25,6 +25,8 @@ type Config struct {
 	ClaudeEffort    string
 	SandboxMemory   string
 	HostShell       string
+	Multiplexer     string
+	Editor          string
 	TmuxSocket      string
 	TmuxConfig      string
 	DockerSBXBinary string
@@ -147,6 +149,17 @@ func Load(_ string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	multiplexer, err := get("multiplexer", "tmux")
+	if err != nil {
+		return Config{}, err
+	}
+	if multiplexer != "tmux" && multiplexer != "rex" {
+		return Config{}, fmt.Errorf("multiplexer must be 'tmux' or 'rex', got: %s", multiplexer)
+	}
+	editor, err := get("editor", "")
+	if err != nil {
+		return Config{}, err
+	}
 	tmuxSocket, err := get("tmux_socket", "sbx-v1")
 	if err != nil {
 		return Config{}, err
@@ -204,6 +217,8 @@ func Load(_ string) (Config, error) {
 		ClaudeEffort:    claudeEffort,
 		SandboxMemory:   sandboxMemory,
 		HostShell:       hostShell,
+		Multiplexer:     multiplexer,
+		Editor:          editor,
 		TmuxSocket:      tmuxSocket,
 		TmuxConfig:      tmuxConfig,
 		DockerSBXBinary: dockerBinary,

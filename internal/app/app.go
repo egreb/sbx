@@ -69,7 +69,7 @@ func (app *App) Run(args []string) int {
 	case "-h", "--help", "help":
 		app.usage()
 		return 0
-	case "new", "open", "add", "project", "split", "delete", "list", "doctor", "pick", "tmux-reload":
+	case "new", "open", "add", "project", "split", "delete", "list", "doctor", "pick", "tmux-reload", "approve":
 		if err = app.loadConfig(); err == nil {
 			switch command {
 			case "new":
@@ -92,10 +92,14 @@ func (app *App) Run(args []string) int {
 				err = app.cmdTUI(args)
 			case "tmux-reload":
 				err = app.cmdTmuxReload(args)
+			case "approve":
+				err = app.cmdApprove(args)
 			}
 		}
 	case "__popup":
 		err = app.cmdPopup(args)
+	case "__rex-open-project":
+		err = app.cmdRexOpenProject(args)
 	case "__sidecar-key":
 		if err = app.loadConfig(); err == nil {
 			err = app.cmdSidecarKey(args)
@@ -216,6 +220,8 @@ Commands:
   list                    List managed workspaces
   pick [--current] [--split]
                           Browse, optionally selecting a side-by-side session
+  approve [--option ID|--dismiss]
+                          Pick pending network approvals in fzf and allow them
   tmux-reload             Reload the user config and reapply sbx bindings
   doctor                  Validate configuration and dependencies
   native COMMAND [...]    Run Docker's native sbx explicitly

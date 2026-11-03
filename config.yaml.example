@@ -11,6 +11,12 @@ claude_effort: high
 # sbx default of 50% of host memory.
 sandbox_memory: 8g
 host_shell: fish
+# Editor for the task prompt (Ctrl-G in sbx new), as a shell command that
+# takes the file to edit. Empty uses $VISUAL, then $EDITOR, then nvim.
+# editor: NVIM_APPNAME=nvim-v2 nvim
+# tmux (default) or rex. With rex, workspaces are Rex sessions opened by
+# rex/sbx.lua and the tmux settings below are unused.
+multiplexer: tmux
 tmux_socket: sbx-v1
 # Optional; omitted means tmux loads your normal user config.
 # tmux_config: ~/.tmux.conf

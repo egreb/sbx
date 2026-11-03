@@ -142,14 +142,39 @@ func (app *App) cloneProjectFromCache(ctx context.Context, project config.Projec
 		return fmt.Errorf("Git cache update failed for %s: %w", project.Name, err)
 	}
 	cache := filepath.Join(app.config.GitCacheRoot, project.Name+".git")
-	app.note("- cloning %s from cache", project.Name)
-	if err := app.runner.Run(ctx, "git", []string{"clone", "--no-local", "--branch", project.Branch, "--", cache, destination}, process.Options{}); err != nil {
+	branch, err := app.cloneBranch(ctx, cache, project.Branch)
+	if err != nil {
+		return fmt.Errorf("%s: %w", project.Name, err)
+	}
+	if branch != project.Branch {
+		app.note("- %s has no branch %s; using %s", project.Name, project.Branch, branch)
+	}
+	app.note("- cloning %s (%s) from cache", project.Name, branch)
+	if err := app.runner.Run(ctx, "git", []string{"clone", "--no-local", "--branch", branch, "--", cache, destination}, process.Options{}); err != nil {
 		return fmt.Errorf("clone failed for %s: %w", project.Name, err)
 	}
 	if err := app.runner.Run(ctx, "git", []string{"-C", destination, "remote", "set-url", "origin", project.Repo}, process.Options{}); err != nil {
 		return fmt.Errorf("cannot set origin for project: %s", project.Name)
 	}
 	return nil
+}
+
+// cloneBranch picks the branch to clone from a mirror: the configured one if
+// it exists, then main, then master, then the repository's default branch.
+func (app *App) cloneBranch(ctx context.Context, cache, configured string) (string, error) {
+	candidates := []string{configured, "main", "master"}
+	if head, err := app.runner.Output(ctx, "git", []string{"-C", cache, "symbolic-ref", "--short", "HEAD"}, process.Options{QuietErr: true}); err == nil {
+		candidates = append(candidates, strings.TrimSpace(head))
+	}
+	for _, branch := range candidates {
+		if branch == "" {
+			continue
+		}
+		if err := app.runner.Run(ctx, "git", []string{"-C", cache, "rev-parse", "--verify", "--quiet", "refs/heads/" + branch}, process.Options{Stdout: io.Discard, QuietErr: true}); err == nil {
+			return branch, nil
+		}
+	}
+	return "", fmt.Errorf("none of the branches %s exist", strings.Join(candidates, ", "))
 }
 
 func (app *App) bootstrapProject(ctx context.Context, project config.Project, path string) error {

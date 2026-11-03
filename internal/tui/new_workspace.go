@@ -3,6 +3,8 @@ package tui
 import (
 	"fmt"
 	"io"
+	"os"
+	"os/exec"
 	"strings"
 	"unicode"
 
@@ -17,6 +19,9 @@ type WorkspaceForm struct {
 	Repositories        []Repository
 	Selected            map[string]bool
 	ValidateName        func(string) error
+	// Editor is a shell command that edits the file named after it, used by
+	// Ctrl-G for the prompt.
+	Editor string
 }
 type workspaceForm struct {
 	data                             WorkspaceForm
@@ -45,6 +50,45 @@ func newWorkspaceForm(data WorkspaceForm) workspaceForm {
 	return workspaceForm{data: data, width: 90, height: 32, nameCursor: len([]rune(data.Name)), promptCursor: len([]rune(data.Prompt))}
 }
 func (m workspaceForm) Init() tea.Cmd { return nil }
+
+type promptEdited struct {
+	path string
+	err  error
+}
+
+// editPrompt hands the terminal to the editor with the prompt in a file.
+func (m workspaceForm) editPrompt() (workspaceForm, tea.Cmd) {
+	file, err := os.CreateTemp("", "sbx-prompt-*.md")
+	if err == nil {
+		_, err = file.WriteString(m.data.Prompt)
+		if closeErr := file.Close(); err == nil {
+			err = closeErr
+		}
+	}
+	if err != nil {
+		m.err = "Cannot open the editor: " + err.Error()
+		return m, nil
+	}
+	editor := exec.Command("/bin/sh", "-c", m.data.Editor+` "$1"`, "sh", file.Name())
+	return m, tea.ExecProcess(editor, func(err error) tea.Msg { return promptEdited{file.Name(), err} })
+}
+
+func (m workspaceForm) promptFromEditor(msg promptEdited) workspaceForm {
+	defer os.Remove(msg.path)
+	m.focus = 2
+	if msg.err != nil {
+		m.err = "Editor failed: " + msg.err.Error()
+		return m
+	}
+	content, err := os.ReadFile(msg.path)
+	if err != nil {
+		m.err = "Cannot read the edited prompt: " + err.Error()
+		return m
+	}
+	m.data.Prompt = strings.TrimRight(cleanFormText(string(content), true), "\n")
+	m.promptCursor = len([]rune(m.data.Prompt))
+	return m
+}
 func (m workspaceForm) matches() []Repository {
 	var rows []Repository
 	for _, repo := range m.data.Repositories {
@@ -67,6 +111,8 @@ func (m workspaceForm) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+	case promptEdited:
+		return m.promptFromEditor(msg), nil
 	case tea.PasteMsg:
 		if m.focus == 0 {
 			insertText(&m.data.Name, &m.nameCursor, cleanFormText(msg.Content, false))
@@ -85,6 +131,11 @@ func (m workspaceForm) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "ctrl+c", "esc":
 			return m, tea.Quit
+		case "ctrl+g":
+			if m.data.Editor != "" {
+				m.err = ""
+				return m.editPrompt()
+			}
 		case "tab":
 			m.focus = (m.focus + 1) % 5
 			return m, nil
@@ -191,6 +242,24 @@ func editFormText(value *string, cursor *int, key tea.KeyPressMsg, multiline boo
 			*value = string(append(r[:*cursor-1], r[*cursor:]...))
 			*cursor--
 		}
+	case "ctrl+w", "alt+backspace":
+		// The previous word and the spaces after it.
+		start := *cursor
+		for start > 0 && unicode.IsSpace(r[start-1]) {
+			start--
+		}
+		for start > 0 && !unicode.IsSpace(r[start-1]) {
+			start--
+		}
+		*value = string(append(r[:start], r[*cursor:]...))
+		*cursor = start
+	case "ctrl+u":
+		start := *cursor
+		for start > 0 && r[start-1] != '\n' {
+			start--
+		}
+		*value = string(append(r[:start], r[*cursor:]...))
+		*cursor = start
 	case "delete":
 		if *cursor < len(r) {
 			*value = string(append(r[:*cursor], r[*cursor+1:]...))
@@ -236,7 +305,11 @@ func (m workspaceForm) View() tea.View {
 		agents = "○ Claude     ● Codex"
 	}
 	fmt.Fprintf(&b, "%s  %s\n\n", label(1, "Agent"), agents)
-	fmt.Fprintf(&b, "%s \x1b[2m(optional)\x1b[0m\n", label(2, "Task prompt"))
+	promptHint := "(optional)"
+	if m.data.Editor != "" {
+		promptHint = "(optional · Ctrl-G edit in editor)"
+	}
+	fmt.Fprintf(&b, "%s \x1b[2m%s\x1b[0m\n", label(2, "Task prompt"), promptHint)
 	prompt := field(m.data.Prompt, m.promptCursor, 2, "What should the agent work on?")
 	lines := strings.Split(ansi.Hardwrap(prompt, max(10, width-4), true), "\n")
 	// Keep the insertion point visible for long prompts.
@@ -254,6 +327,9 @@ func (m workspaceForm) View() tea.View {
 	}
 	for i := min(len(lines)-start, 3); i < 3; i++ {
 		b.WriteString("\n")
+	}
+	if hidden := len(lines) - min(len(lines)-start, 3); hidden > 0 {
+		fmt.Fprintf(&b, "    \x1b[2m(%d more lines)\x1b[0m\n", hidden)
 	}
 	count := 0
 	for _, repo := range m.data.Repositories {
