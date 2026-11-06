@@ -190,17 +190,6 @@ func (m workspaceForm) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						return m, nil
 					}
 				}
-				count := 0
-				for _, repo := range m.data.Repositories {
-					if m.data.Selected[repo.Name] {
-						count++
-					}
-				}
-				if count == 0 {
-					m.err = "Select at least one repository."
-					m.focus = 3
-					return m, nil
-				}
 				m.accepted = true
 				return m, tea.Quit
 			}
@@ -297,7 +286,7 @@ func (m workspaceForm) View() tea.View {
 	if m.data.Notice != "" {
 		fmt.Fprintf(&b, "  \x1b[33m%s\x1b[0m\n\n", ansi.Truncate(m.data.Notice, width, "…"))
 	} else {
-		b.WriteString("  Choose a task and the repositories it needs.\n\n")
+		b.WriteString("  Choose a task and any repositories it needs.\n\n")
 	}
 	fmt.Fprintf(&b, "%s\n    %s\n\n", label(0, "Name"), ansi.Truncate(field(m.data.Name, m.nameCursor, 0, "e.g. fix-checkout"), width-4, "…"))
 	agents := "● Claude     ○ Codex"
@@ -374,7 +363,7 @@ func (m workspaceForm) View() tea.View {
 		if selectedStart+lineIndex < len(selected) {
 			right = selected[selectedStart+lineIndex].Name
 		} else if len(selected) == 0 && lineIndex == 0 {
-			right = "None selected"
+			right = "None (empty workspace)"
 		}
 		fmt.Fprintf(&b, "   %s │ %s\n", left, ansi.Truncate(right, columnWidth, "…"))
 	}

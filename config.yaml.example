@@ -10,6 +10,13 @@ claude_effort: high
 # Memory limit per sandbox (passed as sbx create --memory). Empty uses the
 # sbx default of 50% of host memory.
 sandbox_memory: 8g
+# Extra host directories mounted into every new sandbox at the same path.
+# Read-only unless writable: true. Agents are told about them in their global
+# instructions (~/.claude/CLAUDE.md or ~/.codex/AGENTS.md in the sandbox).
+# Existing sandboxes keep their mounts until recreated.
+# mounts:
+#   - path: ~/vaults
+#     description: Obsidian vaults with my notes; search them for context
 host_shell: fish
 # Editor for the task prompt (Ctrl-G in sbx new), as a shell command that
 # takes the file to edit. Empty uses $VISUAL, then $EDITOR, then nvim.

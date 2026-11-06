@@ -33,20 +33,20 @@ type creationDone struct {
 type creationTick time.Time
 
 type creation struct {
-	workspace string
-	steps     []CreationStep
-	states    []stepState
-	running   int
-	complete  int
-	frame     int
-	err       error
-	initial   tea.Cmd
+	title    string
+	steps    []CreationStep
+	states   []stepState
+	running  int
+	complete int
+	frame    int
+	err      error
+	initial  tea.Cmd
 }
 
 // newCreation starts the first steps here because Init cannot keep changes
 // to the model.
-func newCreation(workspace string, steps []CreationStep) creation {
-	m, initial := creation{workspace: workspace, steps: steps, states: make([]stepState, len(steps))}.start()
+func newCreation(title string, steps []CreationStep) creation {
+	m, initial := creation{title: title, steps: steps, states: make([]stepState, len(steps))}.start()
 	m.initial = initial
 	return m
 }
@@ -107,7 +107,7 @@ func (m creation) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m creation) View() tea.View {
 	var view strings.Builder
-	fmt.Fprintf(&view, "Creating %s\n\nCloning projects (%d/%d complete)\n\n", m.workspace, m.complete, len(m.steps))
+	fmt.Fprintf(&view, "%s\n\nCloning projects (%d/%d complete)\n\n", m.title, m.complete, len(m.steps))
 	for i, step := range m.steps {
 		status := "queued"
 		switch m.states[i] {
@@ -128,11 +128,12 @@ func (m creation) View() tea.View {
 
 // RunCreation leaves a completed project list in the terminal before setup continues.
 // Input stays with subprocesses; cancellation comes from the caller's context.
-func RunCreation(out io.Writer, workspace string, steps []CreationStep) error {
+// title heads the view, e.g. "Creating example".
+func RunCreation(out io.Writer, title string, steps []CreationStep) error {
 	if len(steps) == 0 {
 		return nil
 	}
-	p := tea.NewProgram(newCreation(workspace, steps), tea.WithInput(nil), tea.WithOutput(out), tea.WithoutSignalHandler())
+	p := tea.NewProgram(newCreation(title, steps), tea.WithInput(nil), tea.WithOutput(out), tea.WithoutSignalHandler())
 	result, err := p.Run()
 	if err != nil {
 		return err

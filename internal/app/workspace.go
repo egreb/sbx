@@ -83,7 +83,7 @@ func (app *App) chooseWithFZF(ctx context.Context, prompt string, items []string
 	}
 	args = append(args, "--prompt", prompt)
 	if multi {
-		args = append(args, "--header", "Space select, Enter confirm", "--bind", "space:toggle,tab:down,btab:up")
+		args = append(args, "--header", "Space select, Ctrl-A all, Enter confirm", "--bind", "space:toggle,tab:down,btab:up,ctrl-a:toggle-all")
 	}
 	args = append(args, "--height=100%", "--layout=reverse", "--border")
 	input := ""

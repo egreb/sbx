@@ -26,12 +26,16 @@ The example YAML files are for new installations, not replacements for your mani
 
 ```sh
 sbx new                         # form: name, agent, prompt, repository selection
+                                # (no repositories creates an empty workspace;
+                                # add them later with `sbx add`)
 sbx new --all --no-open example
 sbx new --agent codex --prompt 'Fix the failing tests' example
 sbx open                        # all-workspace picker
 sbx open example
 sbx project backend
-sbx add frontend
+sbx add                         # multi-select picker (Space toggles, Ctrl-A all)
+sbx add frontend backend
+sbx add --all                   # every configured project not yet cloned
 sbx split frontend
 sbx list --names
 sbx delete                      # workspace picker, then exact-name confirmation

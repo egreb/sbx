@@ -29,6 +29,7 @@ local opts = {
     open_workspace = "cmd+shift+o",
     workspace_project = "cmd+shift+f",
     delete_workspace = "cmd+shift+d",
+    add_project = "cmd+shift+c",
     toggle_agent = "cmd+shift+a",
     keybindings = "cmd+shift+/",
   },
@@ -141,13 +142,25 @@ exec "$sbx" __rex-open-project "$dir"
 local workspace_project_picker = [[
 sbx=$1; fzf=$2; workspace=$3; name=$4
 choice=$( { find "$workspace" -mindepth 2 -maxdepth 2 -name .git | sed 's|/\.git$||; s|.*/||' | sort
-            echo '+ add project'; } \
+            echo '+ add projects'; } \
   | "$fzf" --layout=reverse --prompt="$name > ") || exit 0
-if [ "$choice" = '+ add project' ]; then
+if [ "$choice" = '+ add projects' ]; then
   exec "$sbx" add --workspace "$name"
 fi
 exec "$sbx" __rex-open-project "$workspace/$choice"
 ]]
+
+-- The sbx workspace this session belongs to, as its name and directory.
+local function current_workspace(ctx)
+  local name = session_label(ctx.session_id)
+  local workspace = expand(opts.workspace_root) .. "/" .. (name or "")
+  local marker = name and io.open(workspace .. "/.sbx-managed")
+  if not marker then
+    error("This session is not an sbx workspace", 0)
+  end
+  marker:close()
+  return name, workspace
+end
 
 local function open_workspace(ctx, args)
   local name = args.name
@@ -170,14 +183,9 @@ local function open_workspace(ctx, args)
         },
       },
     }
+    -- Its only tab is the agent's, so selecting the session shows it. The
+    -- session is not viewed here: the CLI's stream is not attached to it.
     session_id = call("session.create", { label = name, initial_windows = windows }).session_id
-    -- A new session opens on its agent tab; an existing one keeps its own.
-    local view = call("session.view", { session_id = session_id })
-    for _, window in ipairs(view.windows or {}) do
-      if window.label == "agent" then
-        return { session_id = session_id, window_id = window.window_id }
-      end
-    end
   end
   return { session_id = session_id }
 end
@@ -364,14 +372,18 @@ function M.setup(user)
     title = "Open Project in Workspace…",
     category = "sbx",
     run = function(ctx)
-      local name = session_label(ctx.session_id)
-      local workspace = expand(opts.workspace_root) .. "/" .. (name or "")
-      local marker = name and io.open(workspace .. "/.sbx-managed")
-      if not marker then
-        error("This session is not an sbx workspace", 0)
-      end
-      marker:close()
+      local name, workspace = current_workspace(ctx)
       run_floating("open project", sh(workspace_project_picker, opts.sbx, opts.fzf, workspace, name), opts.picker_size)
+    end,
+  }
+  rex.action{
+    name = "sbx_add_project",
+    title = "Add Projects to Workspace…",
+    category = "sbx",
+    keywords = "clone repository repo add",
+    run = function(ctx)
+      local name = current_workspace(ctx)
+      run_floating("add project", sh('exec "$@"', opts.sbx, "add", "--workspace", name), opts.picker_size)
     end,
   }
   rex.action{
@@ -414,17 +426,30 @@ function M.setup(user)
     run = close_workspace,
   }
 
+  -- Defined before the keys are bound, so the binding finds it. The sheet is
+  -- filled in below and read when the action runs.
+  local sheet = { "sbx keymaps", "" }
+  rex.action{
+    name = "sbx_keybindings",
+    title = "Keymaps",
+    category = "sbx",
+    keywords = "keybindings keys shortcuts help cheat sheet",
+    run = function()
+      run_floating("sbx keys", sh(key_sheet, unpack(sheet)), opts.picker_size)
+    end,
+  }
+
   -- In the order the key sheet lists them.
   local bindings = {
     { "sbx_find_project", opts.keys.find_project, "Find a repository and open it in a tab" },
     { "sbx_new_workspace", opts.keys.new_workspace, "New workspace" },
     { "sbx_pick_workspace", opts.keys.open_workspace, "Switch to a workspace" },
     { "sbx_workspace_project", opts.keys.workspace_project, "Open or add a repository in this workspace" },
+    { "sbx_add_project", opts.keys.add_project, "Clone repositories into this workspace" },
     { "sbx_delete_workspace", opts.keys.delete_workspace, "Delete a workspace" },
     { "sbx_toggle_agent", opts.keys.toggle_agent, "Show or hide this workspace's agent, floating" },
     { "sbx_keybindings", opts.keys.keybindings, "Show these keybindings" },
   }
-  local sheet = { "sbx keybindings", "" }
   for _, b in ipairs(bindings) do
     if b[2] then
       rex.bind(b[2], b[1])
@@ -435,16 +460,6 @@ function M.setup(user)
     bind_navigation()
     sheet[#sheet + 1] = string.format("  %-16s %s", "ctrl+h/j/k/l", "Move between panes (and Neovim splits)")
   end
-
-  rex.action{
-    name = "sbx_keybindings",
-    title = "Keybindings",
-    category = "sbx",
-    keywords = "keys shortcuts help cheat sheet",
-    run = function()
-      run_floating("sbx keys", sh(key_sheet, unpack(sheet)), opts.picker_size)
-    end,
-  }
 end
 
 return M

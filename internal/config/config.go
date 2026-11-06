@@ -30,6 +30,15 @@ type Config struct {
 	TmuxSocket      string
 	TmuxConfig      string
 	DockerSBXBinary string
+	Mounts          []Mount
+}
+
+// Mount is an extra host directory passed to every new sandbox, such as a
+// notes vault. Description tells the agent what the directory holds.
+type Mount struct {
+	Path        string
+	Writable    bool
+	Description string
 }
 
 type Project struct {
@@ -173,6 +182,11 @@ func Load(_ string) (Config, error) {
 		return Config{}, err
 	}
 
+	mounts, err := loadMounts(values["mounts"], home)
+	if err != nil {
+		return Config{}, err
+	}
+
 	workspaceRoot = expandHome(workspaceRoot, home)
 	projectsFile = expandHome(projectsFile, home)
 	gitCacheRoot = expandHome(gitCacheRoot, home)
@@ -222,5 +236,61 @@ func Load(_ string) (Config, error) {
 		TmuxSocket:      tmuxSocket,
 		TmuxConfig:      tmuxConfig,
 		DockerSBXBinary: dockerBinary,
+		Mounts:          mounts,
 	}, nil
+}
+
+func loadMounts(node *yaml.Node, home string) ([]Mount, error) {
+	if node == nil || (node.Kind == yaml.ScalarNode && node.Tag == "!!null") {
+		return nil, nil
+	}
+	if node.Kind != yaml.SequenceNode {
+		return nil, fmt.Errorf("mounts must be a sequence")
+	}
+	var mounts []Mount
+	seen := map[string]bool{}
+	for _, entry := range node.Content {
+		fields, err := stringMap(entry)
+		if err != nil {
+			return nil, fmt.Errorf("mounts: %w", err)
+		}
+		var mount Mount
+		for key, value := range fields {
+			switch key {
+			case "path", "description":
+				if value.Kind != yaml.ScalarNode || value.Tag != "!!str" {
+					return nil, fmt.Errorf("mounts: %s must be a string", key)
+				}
+				if key == "path" {
+					mount.Path = value.Value
+				} else {
+					mount.Description = strings.TrimSpace(value.Value)
+				}
+			case "writable":
+				if value.Kind != yaml.ScalarNode || value.Tag != "!!bool" {
+					return nil, fmt.Errorf("mounts: writable must be true or false")
+				}
+				mount.Writable = value.Value == "true"
+			default:
+				return nil, fmt.Errorf("mounts: unknown key %q", key)
+			}
+		}
+		if mount.Path == "" {
+			return nil, fmt.Errorf("mounts: every entry needs a path")
+		}
+		mount.Path = filepath.Clean(expandHome(mount.Path, home))
+		if !filepath.IsAbs(mount.Path) {
+			return nil, fmt.Errorf("mounts: path must be absolute or start with ~/: %s", mount.Path)
+		}
+		// sbx create separates a path from its :ro suffix with a colon.
+		if strings.ContainsAny(mount.Path, ":,") {
+			return nil, fmt.Errorf("mounts: path cannot contain ':' or ',': %s", mount.Path)
+		}
+		if seen[mount.Path] {
+			return nil, fmt.Errorf("mounts: duplicate path %s", mount.Path)
+		}
+		seen[mount.Path] = true
+		mounts = append(mounts, mount)
+	}
+	return mounts, nil
 }

@@ -211,7 +211,8 @@ Commands:
   new [--all] [--no-open] [--agent claude|codex] [--prompt text] [name]
                             Select projects and create a sandbox workspace
   open [name]             Open or switch to a managed workspace
-  add [project]          Clone a configured project into the current workspace
+  add [--all] [project...]
+                            Pick projects (or name them) to clone into this workspace
   project [name|--next|--previous]  Open/switch a host project session
   split [project|agent]  Open a workspace session beside the current pane
   delete [--yes] [name]  Pick a workspace to delete; confirm by typing its name.

@@ -189,7 +189,7 @@ func (app *App) cmdNew(args []string) (returnErr error) {
 	}
 	exists, err := app.nativeSandboxNamedExists(background, name, true)
 	if err != nil {
-		return fmt.Errorf("cannot verify whether Docker Sandbox '%s' exists", name)
+		return fmt.Errorf("cannot verify whether Docker Sandbox '%s' exists: %w", name, err)
 	}
 	if exists {
 		return fmt.Errorf("Docker Sandbox already exists: %s", name)
@@ -218,16 +218,6 @@ func (app *App) cmdNew(args []string) (returnErr error) {
 			selected[project] = true
 		}
 	}
-	selectionCount := 0
-	for _, chosen := range selected {
-		if chosen {
-			selectionCount++
-		}
-	}
-	if selectionCount == 0 {
-		return errors.New("at least one project must be selected")
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	signalChannel := make(chan os.Signal, 1)
@@ -282,17 +272,7 @@ func (app *App) cmdNew(args []string) (returnErr error) {
 			}})
 		}
 	}
-	if output, ok := app.Out.(*os.File); ok && term.IsTerminal(output.Fd()) {
-		var logs creationLog
-		previousRunner, previousErr := app.runner, app.Err
-		app.runner.Out, app.runner.Err, app.Err = &logs, &logs, &logs
-		err := tui.RunCreation(app.Out, name, cloneSteps)
-		app.runner, app.Err = previousRunner, previousErr
-		if err != nil {
-			fmt.Fprint(app.Err, logs.String())
-			return err
-		}
-	} else if err := runParallel(cloneSteps, tui.CreationParallelism); err != nil {
+	if err := app.runCloneSteps("Creating "+name, cloneSteps); err != nil {
 		return err
 	}
 
@@ -311,11 +291,19 @@ func (app *App) cmdNew(args []string) (returnErr error) {
 		createArgs = append(createArgs, "--memory", app.config.SandboxMemory)
 	}
 	createArgs = append(createArgs, agent, workspace)
+	mountArgs, err := app.mountArguments()
+	if err != nil {
+		return err
+	}
+	createArgs = append(createArgs, mountArgs...)
 	if err := app.runner.Run(ctx, app.native, createArgs, process.Options{}); err != nil {
 		return fmt.Errorf("Docker Sandbox creation failed: %s", name)
 	}
 	exists, err = app.nativeSandboxNamedExists(ctx, name, true)
-	if err != nil || !exists {
+	if err != nil {
+		return fmt.Errorf("cannot verify Docker Sandbox '%s' after creation: %w", name, err)
+	}
+	if !exists {
 		return fmt.Errorf("Docker Sandbox creation did not produce '%s'", name)
 	}
 
@@ -325,10 +313,14 @@ func (app *App) cmdNew(args []string) (returnErr error) {
 		}
 	}
 
+	if err := app.writeMountNotes(ctx, name, agent); err != nil {
+		return err
+	}
+
 	if app.usingRex() {
 		app.note("- opening Rex session %s", name)
 		if err := app.rexOpenWorkspace(ctx, name, workspace, prompt, !noOpen); err != nil {
-			return fmt.Errorf("Rex session creation failed: %s", name)
+			return fmt.Errorf("Rex session creation failed: %s: %w", name, err)
 		}
 		complete = true
 		app.note("Created sandbox workspace '%s'.", name)

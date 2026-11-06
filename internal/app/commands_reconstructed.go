@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -17,9 +18,17 @@ func (app *App) nativeSandboxNamedExists(ctx context.Context, name string, quiet
 	if e := app.needNative(); e != nil {
 		return false, e
 	}
-	out, e := app.runner.Output(ctx, app.native, []string{"ls", "--quiet"}, process.Options{QuietErr: quiet})
+	var stderr bytes.Buffer
+	options := process.Options{}
+	if quiet {
+		options.Stderr = &stderr
+	}
+	out, e := app.runner.Output(ctx, app.native, []string{"ls", "--quiet"}, options)
 	if e != nil {
-		return false, e
+		if detail := strings.TrimSpace(stderr.String()); detail != "" {
+			return false, fmt.Errorf("%s ls --quiet: %w: %s", app.native, e, detail)
+		}
+		return false, fmt.Errorf("%s ls --quiet: %w", app.native, e)
 	}
 	for _, l := range outputLines(out) {
 		if strings.TrimSpace(l) == name {

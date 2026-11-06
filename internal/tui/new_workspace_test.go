@@ -57,15 +57,20 @@ func TestWorkspaceFormValidationAndCancel(t *testing.T) {
 	if m.accepted || m.focus != 0 || m.err == "" {
 		t.Fatal("invalid name submitted")
 	}
-	m.data.Name = "valid"
-	m.focus = 4
-	m = formKey(m, tea.KeyPressMsg{Code: tea.KeyEnter})
-	if m.accepted || m.focus != 3 {
-		t.Fatal("empty repo selection submitted")
-	}
 	m = formKey(m, tea.KeyPressMsg{Code: tea.KeyEscape})
 	if m.accepted {
 		t.Fatal("cancel submitted")
+	}
+}
+func TestWorkspaceFormWithoutRepositories(t *testing.T) {
+	m := newWorkspaceForm(WorkspaceForm{Name: "valid", Agent: "claude", Repositories: []Repository{{Name: "api"}}})
+	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "None (empty workspace)") {
+		t.Fatal(view)
+	}
+	m.focus = 4
+	m = formKey(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if !m.accepted || m.err != "" || len(m.selectedRepositories()) != 0 {
+		t.Fatalf("form without repositories did not submit: %#v", m)
 	}
 }
 func TestWorkspaceFormPasteAndEdit(t *testing.T) {
